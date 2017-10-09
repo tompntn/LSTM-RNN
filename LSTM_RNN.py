@@ -145,9 +145,6 @@ class LSTM_RNN:
         p = 0 # Pointer to the position in the data
         while n <= iterations:
 
-            # Output progress
-            print 'Iteration %d' % (n, )
-
             # Cycling over the data 
             if (p + SEQ_LEN + 1 >= len(inputs)) or n == 0:
                 p = 0
