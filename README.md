@@ -7,7 +7,7 @@ These networks are particularly good for learning long-term dependencies within 
 
 An LSTM cell has 4 gates, based on the following formulas:
 
-<img src="https://latex.codecogs.com/svg.latex?\large&space;\begin{align*}&space;input^t&space;&=&space;\sigma(W_ix^t&space;&plus;&space;U_ih^{t-1})&space;\\&space;forget^t&space;&=&space;\sigma(W_fx^t&space;&plus;&space;U_fh^{t-1})&space;\\&space;output^t&space;&=&space;\sigma(W_ox^t&space;&plus;&space;U_oh^{t-1})&space;\\&space;g^t&space;&=&space;\tanh(W_gx^t&space;&plus;&space;U_gh^{t-1})&space;\\&space;\end{align*}" title="\large \begin{align*} i^t &= \sigma(W_ix^t + U_ih^{t-1}) \\ f^t &= \sigma(W_fx^t + U_fh^{t-1}) \\ o^t &= \sigma(W_ox^t + U_oh^{t-1}) \\ g^t &= \tanh(W_gx^t + U_gh^{t-1}) \\ \end{align*}" />
+<img src="https://latex.codecogs.com/svg.latex?\large&space;\begin{align*}&space;input^t&space;&=&space;\sigma(W_ix^t&space;&plus;&space;U_ih^{t-1})&space;\\&space;forget^t&space;&=&space;\sigma(W_fx^t&space;&plus;&space;U_fh^{t-1})&space;\\&space;output^t&space;&=&space;x\sigma(W_ox^t&space;&plus;&space;U_oh^{t-1})&space;\\&space;g^t&space;&=&space;\tanh(W_gx^t&space;&plus;&space;U_gh^{t-1})&space;\\&space;\end{align*}" title="\large \begin{align*} i^t &= \sigma(W_ix^t + U_ih^{t-1}) \\ f^t &= \sigma(W_fx^t + U_fh^{t-1}) \\ o^t &= \sigma(W_ox^t + U_oh^{t-1}) \\ g^t &= \tanh(W_gx^t + U_gh^{t-1}) \\ \end{align*}" />
 
 Each gate has it's own set of paramaters to learn, which makes training vanilla implementations (such as this one) expensive.
 
@@ -32,3 +32,8 @@ The training data should be encoded as integers, and given as two lists: a list 
 ```python
 rnn.train(iterations, inputs, targets)
 ```
+
+## Planned Features and Improvements
+* A sampling method to view the output of the network as it is training, using a forward pass.
+* Refactor the code in modules which employ the standard forward-backward API.
+* Use a linear sigmoid function to improve the speed.
