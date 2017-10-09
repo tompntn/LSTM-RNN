@@ -1,31 +1,5 @@
-import copy, numpy as np
-
-# -------- Utility Functions --------
-def init_dict(d):
-    return {k: np.zeros_like(v) for k, v in d.iteritems()} 
-
-def normalise(vec):
-    return vec / np.sum(vec)
-
-def one_hot_vec(len, i):
-    vec    = np.zeros((len, 1))
-    vec[i] = 1
-
-    return vec
-
-def sigmoid(x, D):
-# TODO: replace with hard sigmoid
-    if not D:
-        return 1 / (1 + np.exp(- x))
-    else:
-        s = sigmoid(x, False)
-        return s - (s ** 2)
-
-def tanh(x, D):
-    if not D:
-        return np.tanh(x)
-    else:
-        return 1.0 - (np.tanh(x) ** 2)
+import copy, numpy as np # Python math libraries
+import utilities # My utility functions, in a separate file
 
 class LSTM_RNN:
     
@@ -35,22 +9,6 @@ class LSTM_RNN:
         self.IN_DIM        = IN_DIM
         self.H_DIM         = H_DIM
         self.OUT_DIM       = OUT_DIM
-
-        # Need 4 of each synapse, for the gates between the layers
-        def gen_lstm_syn(X_DIM, Y_DIM, zeroed):
-
-            def layer():
-                if zeroed:
-                    return np.zeros((X_DIM, Y_DIM))
-                else:
-                    return np.random.random((X_DIM, Y_DIM)) * 0.01
-
-            return {
-                'i': layer(),
-                'f': layer(),
-                'o': layer(),
-                'g': layer()
-            }
 
         # "Synapses", i.e. weights between layers
         self.syn = {
@@ -65,31 +23,25 @@ class LSTM_RNN:
             # TODO: add biases to LSTM cells
         }
 
-    # Handles forward and backward propagation
+    # Forward and backward propagation
     def propagation(self, inputs, targets, prev_h_state_init, prev_c_state_init):
 
-        # "Layers" hold the nodes of the neural network, and the states of the LSTM cell
+        # "Layers" hold the nodes of the neural network, and the states of the LSTM cell, at each point in time
         layers = {
-            'in': {},
-            'c': {}, # Internal states of the LSTM cell
-            'i': {},
-            'f': {},
-            'o': {},
-            'g': {},
-            'h': {},
-            'out': {}
+            'in': {}, # Input layer
+                      # Internal state of the LSTM cell
+            'c': {},  # Value of the cell
+            'i': {},  # Input gate
+            'f': {},  # Forget gate
+            'o': {},  # Output gate
+            'g': {},  # Transformation gate (before cell values are updated)
+
+            'h': {},  # Hidden layer
+            'out': {} # Output layer
         }
 
         # Keep track of the total loss
         loss = 0
-
-        # Initialising adagrad memory variables
-        M_syn = {
-            'in_h': init_dict(self.syn['in_h']),
-            'h_h': init_dict(self.syn['h_h']),
-            'h_out': np.zeros_like(self.syn['h_out'])
-        }
-        M_bias  = init_dict(self.bias)
 
         # Forward propagration
         for t in xrange(len(inputs)):
@@ -108,18 +60,7 @@ class LSTM_RNN:
             layers['g'][t] = tanh(np.dot(self.syn['in_h']['g'], layers['in'][t]) + np.dot(self.syn['h_h']['g'], prev_h), False)
             
             # Updating the cell value
-            print "PREV H SHAPE"
-            print prev_h.shape
-            print "PREV C SHAPE"
-            print prev_c.shape
-            print "LAYERS F SHAPE"
-            print layers['f'][t].shape
-
             layers['c'][t] = np.multiply(prev_c, layers['f'][t].T) + np.multiply(layers['g'][t], layers['i'][t].T)
-
-            print "LAYERS C SHAPE" 
-            print layers['c'][t].shape
-            print "^^ LAYER C UPDATED"
 
             # Output of the LSTM cell
             layers['h'][t] = np.multiply(tanh(layers['c'][t], False), layers['o'][t])
@@ -137,9 +78,17 @@ class LSTM_RNN:
             'h_out': np.zeros_like(self.syn['h_out'])
         }
         D_bias       = init_dict(self.bias)
-        next_h_deriv = np.zeros_like(layers['h'][0])        
+        next_h_deriv = np.zeros_like(layers['h'][0])    
 
-        # Backpropagation
+        # Initialising adagrad memory variables
+        M_syn = {
+            'in_h': init_dict(self.syn['in_h']),
+            'h_h': init_dict(self.syn['h_h']),
+            'h_out': np.zeros_like(self.syn['h_out'])
+        }
+        M_bias  = init_dict(self.bias)    
+
+        # Backward propagation
         for t in reversed(xrange(len(inputs))):
 
             # Softmax loss
@@ -150,7 +99,7 @@ class LSTM_RNN:
             D_syn['h_out'] += np.dot(D_out, layers['h'][t].T)
             D_bias['out']  += D_out
             
-            # Backpropagrate through the LSTM
+            # Backpropagrate through the LSTM cell
             D_o        = np.multiply(layers['h'][t], tanh(layers['c'][t], False))
             D_c[t]     += np.multiply(layers['h'][t], np.multiply(layers['o'][t], tanh(layers['c'][t], True)))
             D_i        = np.multiply(D_c[t], layers['g'][t])
@@ -187,15 +136,16 @@ class LSTM_RNN:
         return layers['h'][len(inputs)-1]
 
     # The training function
-    def train(self, ITERATIONS, inputs, targets, digit_to_char):
+    def train(self, iterations, inputs, targets):
 
-        # Arbitary training input sequence length
+        # (Arbitary) training input sequence length
         SEQ_LEN = 200
 
-        n = 0
-        p = 0
-        while n <= ITERATIONS:
+        n = 0 # Iteration count
+        p = 0 # Pointer to the position in the data
+        while n <= iterations:
 
+            # Output progress
             print 'Iteration %d' % (n, )
 
             # Cycling over the data 
@@ -214,28 +164,4 @@ class LSTM_RNN:
 
             p += SEQ_LEN                                                                                                                                                      
             n += 1
-
-def main():
-    # The input source
-    filename = 'small_input.txt'
-
-    # Encoding the data, mapping chars to numbers
-    data                 = open(filename, 'r').read()
-    chars                = list(set(data))
-    data_size, nub_chars = len(data), len(chars)
-    char_to_digit        = {ch:d for d, ch in enumerate(chars)}
-    digit_to_char        = {d:ch for d, ch in enumerate(chars)}
-    input_data           = [char_to_digit[c] for c in data]
-
-    # Initialising the RNN, output will be probabilities for each character
-    rnn = LSTM_RNN(1e-1, nub_chars, 100, nub_chars)
-
-    # The target data is the next character we want to predict, so shift the input array right
-    target_data = input_data[-1:] + input_data[:-1]
-
-    # Training the network
-    rnn.train(1e5, input_data, target_data, digit_to_char)
-
-if __name__ == "__main__":
-    main()
         
