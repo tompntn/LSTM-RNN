@@ -1,35 +1,32 @@
-import copy, numpy as np # Python math libraries
-import utilities # My utility functions, in a separate file
+import utils
+import numpy as np
 
 class LSTM_RNN:
-    
-    def __init__(self, LEARNING_RATE, IN_DIM, H_DIM, OUT_DIM):
+    def __init__(self, lr, in_dim, h_him, out_dim):
 
-        self.LEARNING_RATE = LEARNING_RATE
-        self.IN_DIM        = IN_DIM
-        self.H_DIM         = H_DIM
-        self.OUT_DIM       = OUT_DIM
+        # Hyperparamaters
+        self.lr = lr  # Learning rate
+        self.in_dim = in_dim  # Dimension of input layer
+        self.h_dim = h_him  # Dimension of hidden layer
+        self.out_dim = out_dim  # Dimension of output layer
 
-        # "Synapses", i.e. weights between layers
-        self.syn = {
-            'in_h': gen_lstm_syn(H_DIM, IN_DIM, False),
-            'h_h': gen_lstm_syn(H_DIM, H_DIM, False),
-            'h_out': np.random.random((OUT_DIM, H_DIM)) * 0.01
+        # "Variables", i.e. the parameters to learn (inspired by Tensorflow)
+        self.vars = {
+            # Weights between input and hidden state
+            'in_h': init_lstm_weights(h_him, in_dim, False),
+            # Weights between hidden state at consecutive timesteps
+            'h_h': init_lstm_weights(h_him, h_him, False),
+            # Weights between hidden and output state
+            'h_out': np.random.random((out_dim, h_him)) * 0.01,
+            # Output layer bias
+            'bias': np.zeros(out_dim)
         }
 
-        # Biases
-        self.bias = {
-            'out': np.zeros((OUT_DIM, 1))
-            # TODO: add biases to LSTM cells
-        }
+        # Holds the state of the neural network at each point in time
+        self.state = {
+            'in': {},  # Input layer
 
-    # Forward and backward propagation
-    def propagation(self, inputs, targets, prev_h_state_init, prev_c_state_init):
-
-        # "Layers" hold the nodes of the neural network, and the states of the LSTM cell, at each point in time
-        layers = {
-            'in': {}, # Input layer
-                      # Internal state of the LSTM cell
+            # Internal state of the LSTM cell
             'c': {},  # Value of the cell
             'i': {},  # Input gate
             'f': {},  # Forget gate
@@ -37,128 +34,165 @@ class LSTM_RNN:
             'g': {},  # Transformation gate (before cell values are updated)
 
             'h': {},  # Hidden layer
-            'out': {} # Output layer
+            'out': {}  # Output layer
         }
 
-        # Keep track of the total loss
+    # Forward Propagation
+    def forward_pass(self, inputs, targets, first_prev_h, first_prev_c):
+        
         loss = 0
 
-        # Forward propagration
+        # For each input in the set
         for t in xrange(len(inputs)):
 
-            # Encoding input layer
-            layers['in'][t]  = one_hot_vec(self.IN_DIM, inputs[t])
+            # Encode input layer
+            self.state['in'][t] = one_hot_vec(self.in_dim, inputs[t])
 
-            # Edge case for initial hidden and cell states
-            prev_h           = layers['h'][t - 1] if t > 0 else prev_h_state_init
-            prev_c           = layers['c'][t - 1] if t > 0 else prev_c_state_init
+            # Get previous states if available
+            prev_h = self.state['h'][t - 1] if t > 0 else first_prev_h
+            prev_c = self.state['h'][t - 1] if t > 0 else first_prev_c
 
-            # Calculating LSTM cell gate values
-            layers['i'][t] = sigmoid(np.dot(self.syn['in_h']['i'], layers['in'][t]) + np.dot(self.syn['h_h']['i'], prev_h), False)
-            layers['f'][t] = sigmoid(np.dot(self.syn['in_h']['f'], layers['in'][t]) + np.dot(self.syn['h_h']['f'], prev_h), False)
-            layers['o'][t] = sigmoid(np.dot(self.syn['in_h']['o'], layers['in'][t]) + np.dot(self.syn['h_h']['o'], prev_h), False)
-            layers['g'][t] = tanh(np.dot(self.syn['in_h']['g'], layers['in'][t]) + np.dot(self.syn['h_h']['g'], prev_h), False)
+            # Update LSTM cell gates and value
+            self.state['i'][t] = sigmoid(
+                np.dot(self.vars['in_h']['i'], self.state['in'][t]) +
+                np.dot(self.vars['h_h']['i'], prev_h),
+                False)
+            self.state['f'][t] = sigmoid(
+                np.dot(self.vars['in_h']['f'], self.state['in'][t]) +
+                np.dot(self.vars['h_h']['f'], prev_h),
+                False)
+            self.state['o'][t] = sigmoid(
+                np.dot(self.vars['in_h']['o'], self.state['in'][t]) +
+                np.dot(self.vars['h_h']['o'], prev_h),
+                False)
+            self.state['g'][t] = tanh(
+                np.dot(self.vars['in_h']['g'], self.state['in'][t]) +
+                np.dot(self.vars['h_h']['g'], prev_h),
+                False)
+            self.state['c'][t] = np.multiply(prev_c, self.state['f'][t].T) +\
+                np.multiply(self.state['g'][t], state['i'][t].T)
             
-            # Updating the cell value
-            layers['c'][t] = np.multiply(prev_c, layers['f'][t].T) + np.multiply(layers['g'][t], layers['i'][t].T)
+            # Propagating from the cell to the hidden layer
+            self.state['h'][t] = np.multiply(
+                tanh(self.state['c'][t], False),
+                self.state['o'][t])
 
-            # Output of the LSTM cell
-            layers['h'][t] = np.multiply(tanh(layers['c'][t], False), layers['o'][t])
-                        
-            # Propagating to the output layer and normalising
-            layers['out'][t] = normalise(np.exp(np.dot(self.syn['h_out'], layers['h'][t]) + self.bias['out']))
-            
             # Softmax loss
-            loss             += -np.log(layers['out'][t][targets[t], 0])
+            loss += -np.log(state['out'][t][targets[t], 0])
+        
+        # Return the loss
+        return loss
 
-        # Initialising the derivatives 
-        D_syn = {
-            'in_h': init_dict(self.syn['in_h']),
-            'h_h': init_dict(self.syn['h_h']),
-            'h_out': np.zeros_like(self.syn['h_out'])
-        }
-        D_bias       = init_dict(self.bias)
-        next_h_deriv = np.zeros_like(layers['h'][0])    
+    # Backward Bropagation
+    def backward_pass(self, inputs, targets, first_prev_h, first_prev_c):
 
-        # Initialising adagrad memory variables
-        M_syn = {
-            'in_h': init_dict(self.syn['in_h']),
-            'h_h': init_dict(self.syn['h_h']),
-            'h_out': np.zeros_like(self.syn['h_out'])
+        # Initialising gradients
+        D_vars = {
+            'in_h': init_dict_like(self.vars['in_h']),
+            'h_h': init_dict_like(self.vars['h_h']),
+            'h_out': np.zeros_like(self.vars['h_out']),
+            'bias': np.zeros(OUT_DIM)
         }
-        M_bias  = init_dict(self.bias)    
+
+        # Initialising Adagrad memory variables
+        M_vars = {
+            'in_h': init_dict_like(self.vars['in_h']),
+            'h_h': init_dict_like(self.vars['h_h']),
+            'h_out': np.zeros_like(self.vars['h_out']),
+            'bias': np.zeros(OUT_DIM)
+        }
 
         # Backward propagation
         for t in reversed(xrange(len(inputs))):
 
             # Softmax loss
-            D_out             = np.copy(layers['out'][t])
+            D_out = np.copy(self.state['out'][t])
             D_out[targets[t]] -= 1
-            
+
             # Hidden to output
-            D_syn['h_out'] += np.dot(D_out, layers['h'][t].T)
-            D_bias['out']  += D_out
-            
-            # Backpropagrate through the LSTM cell
-            D_o        = np.multiply(layers['h'][t], tanh(layers['c'][t], False))
-            D_c[t]     += np.multiply(layers['h'][t], np.multiply(layers['o'][t], tanh(layers['c'][t], True)))
-            D_i        = np.multiply(D_c[t], layers['g'][t])
-            D_g        = np.multiply(D_c[t], layers['i'][t])
-            prev_c     = layers['c'][t - 1] if t > 0 else prev_c_state_init
-            D_f        = np.multiply(D_c[t], prev_c)
-            D_c[t - 1] = np.multiply(D_c[t], layers['f'][t])
-            prev_h     = layers['h'][t - 1] if t > 0 else prev_h_state_init
-            D_g_prime  = np.multiply(D_g, (np.dot(self.syn['in_h']['g'], layers['in'][t]) + np.dot(self.syn['h_h']['g'], prev_h) + self.bias['h']['g']))
-            D_i_prime  = np.multiply(D_i, np.multiply (layers['i'][t], 1 - layers['i'][t]))
-            D_f_prime  = np.multiply(D_f, np.multiply (layers['f'][t], 1 - layers['f'][t]))
-            D_o_prime  = np.multiply(D_o, np.multiply (layers['o'][t], 1 - layers['o'][t]))
+            D_vars['h_out'] += np.dot(D_out, self.state['h'][t].T)
+            D_vars['bias'] += D_out
 
-            # Multiply the first set of gradients by the input
-            D_syn['in_h']['i'] = np.dot(D_i_prime, layers['in'][t].T)
-            D_syn['in_h']['f'] = np.dot(D_f_prime, layers['in'][t].T)
-            D_syn['in_h']['o'] = np.dot(D_o_prime, layers['in'][t].T)
-            D_syn['in_h']['g'] = np.dot(D_g_prime, layers['in'][t].T)
+            # Backpropagate through the LSTM cell
+            D_o = np.multiply(
+                self.state['h'][t],
+                tanh(self.state['c'][t], False))
+            D_c[t] += np.multiply(
+                self.state['h'][t],
+                np.multiply(
+                    self.state['o'][t],
+                    tanh(self.state['c'][t], True)))
+            D_i = np.multiply(D_c[t], self.state['g'][t])
+            D_g = np.multiply(D_c[t], self.state['i'][t])
+            prev_c = self.state['c'][t - 1] if t > 0 else first_prev_c
+            D_f = np.multiply(D_c[t], prev_c)
+            D_c[t - 1] = np.multiply(D_c[t], self.state['f'][t])
+            prev_h = self.state['h'][t - 1] if t > 0 else first_prev_h
+            D_prime = {}
+            D_prime['g'] = np.multiply(
+                D_g,
+                (np.dot(self.vars['in_h']['g'], self.state['in'][t]) +
+                np.dot(self.vars['h_h']['g'], prev_h)))
+            D_prime['i'] = np.multiply(
+                D_i,
+                np.multiply(self.state['i'][t], 1 - self.state['i'][t]))
+            D_prime['f'] = np.multiply(
+                D_f,
+                np.multiply(self.state['f'][t], 1 - self.state['f'][t]))
+            D_prime['o'] = np.multiply(
+                D_o, np.multiply(self.state['o'][t], 1 - self.state['o'][t]))
 
-            # Multiply the second set by the hidden state
-            D_syn['h_h']['i'] = np.dot(D_i_prime, prev_h.T)
-            D_syn['h_h']['f'] = np.dot(D_f_prime, prev_h.T)
-            D_syn['h_h']['o'] = np.dot(D_o_prime, prev_h.T)
-            D_syn['h_h']['g'] = np.dot(D_g_prime, prev_h.T)
+            for k, d in D_prime.iteritems():
+                # Multiply the first set of gradients by the input
+                D_vars['in_h'][k] = np.dot(d, self.state['in'][t].T)
+                # Multiply the second set by the previous hidden state
+                D_vars['h_h'][k] = np.dot(d, prev_h.T)
 
-        # Adagrad paramater update
-        for p, D_p, M_p in zip([self.syn['in_h']['i'], self.syn['in_h']['f'], self.syn['in_h']['o'], self.syn['in_h']['g'], self.syn['h_h']['i'], self.syn['h_h']['f'], self.syn['h_h']['o'], self.syn['h_h']['g'], self.syn['h_out'], self.bias['out']],
-                                [D_syn['in_h']['i'], D_syn['in_h']['f'], D_syn['in_h']['o'], D_syn['in_h']['g'], D_syn['h_h']['i'], D_syn['h_h']['f'], D_syn['h_h']['o'], D_syn['h_h']['g'], D_syn['h_out'], D_bias['out']],
-                                [M_syn['in_h']['i'], M_syn['in_h']['f'], M_syn['in_h']['o'], M_syn['in_h']['g'], M_syn['h_h']['i'], M_syn['h_h']['f'], M_syn['h_h']['o'], M_syn['h_h']['g'], M_syn['h_out'], M_bias['out']]):
+        # Adagrad parameter update
+        for p, D_p, M_p in zip(
+                [self.vars['in_h']['i'], self.vars['in_h']['f'],
+                 self.vars['in_h']['o'], self.vars['in_h']['g'],
+                 self.vars['h_h']['i'], self.vars['h_h']['f'],
+                 self.vars['h_h']['o'], self.vars['h_h']['g'],
+                 self.vars['h_out'], self.vars['bias']],
+                [D_vars['in_h']['i'], D_vars['in_h']['f'], D_vars['in_h']['o'],
+                 D_vars['in_h']['g'],
+                 D_vars['h_h']['i'], D_vars['h_h']['f'], D_vars['h_h']['o'],
+                 D_vars['h_h']['g'], D_vars['h_out'],
+                 D_vars['bias']],
+                [M_vars['in_h']['i'], M_vars['in_h']['f'], M_vars['in_h']['o'],
+                 M_vars['in_h']['g'],
+                 M_vars['h_h']['i'], M_vars['h_h']['f'], M_vars['h_h']['o'],
+                 M_vars['h_h']['g'], M_vars['h_out'],
+                 M_vars['bias']]):
             M_p += D_p * D_p
-            p += -(self.LEARNING_RATE) * D_p / np.sqrt(M_p + 1e-8) # In case of a division by zero error
+            p += -(self.lr) * D_p / np.sqrt(M_p + 1e-8)  # Avoiding x / 0
+            
 
-        # Pass out the latest hidden state
-        return layers['h'][len(inputs)-1]
+        # Return latest hidden state
+        return self.state['h'][len(inputs) - 1]
 
     # The training function
-    def train(self, iterations, inputs, targets):
+    def train(self, iterations, inputs, targets, slice_len):
 
-        # (Arbitary) training input sequence length
-        SEQ_LEN = 200
-
-        n = 0 # Iteration count
-        p = 0 # Pointer to the position in the data
+        n = 0  # Iteration count
+        p = 0  # Pointer to the position in the data
         while n <= iterations:
 
-            # Cycling over the data 
-            if (p + SEQ_LEN + 1 >= len(inputs)) or n == 0:
+            # Resetting pointers and states if we reach the end of our data
+            if (p + slice_len + 1 >= len(inputs)) or n == 0:
                 p = 0
-                # Resetting the hidden state
-                h = np.zeros((self.H_DIM, 1))
-                c = np.zeros((self.H_DIM, 1))
+                h = np.zeros((self.h_dim, 1))
+                c = np.zeros((self.h_dim, 1))
 
-            # Slicing the inputs we want in this sequence
-            seq_inputs  = inputs[p:p+SEQ_LEN]
-            seq_targets = targets[p:p+SEQ_LEN]
+            # Slicing the inputs we want for this pass
+            inputs_slice = inputs[p:p + slice_len]
+            targets_slice = targets[p:p + slice_len]
 
-            # Propagrate forwards and backwards through the network, returning a new hidden state
-            h = self.propagation(inputs, targets, h, c)  
-
-            p += SEQ_LEN                                                                                                                                                      
+            # Forward Propogation
+            loss = self.forward_pass(inputs_slice, targets_slice, h, c)
+            # Backwards Propogation
+            h = self.backward_pass(inputs_slice, targets_slice, h, c)
+            
+            p += slice_len
             n += 1
-        

@@ -1,22 +1,35 @@
-def init_dict(d):
-    return {k: np.zeros_like(v) for k, v in d.iteritems()} 
+''' ---------------------------------
+Utility Functions
 
+Simple utility functions, placed in here to make the main code easier to read
+--------------------------------- '''
+
+
+# Initialises a dictionary with the same keys as d but with zero-vector values
+def init_dict_like(d):
+    return {k: np.zeros_like(v) for k, v in d.iteritems()}
+
+
+# Normalises a vector
 def normalise(vec):
     return vec / np.sum(vec)
 
+# Generates a one-hot-vector of length len, with the ith element 1
 def one_hot_vec(len, i):
-    vec    = np.zeros((len, 1))
+    vec = np.zeros((len, 1))
     vec[i] = 1
 
     return vec
 
+
+# TODO: possibly replace with hard sigmoid (faster)
 def sigmoid(x, D):
-# TODO: maybe replace with hard sigmoid, for efficiency
     if not D:
         return 1 / (1 + np.exp(- x))
     else:
         s = sigmoid(x, False)
         return s - (s ** 2)
+
 
 def tanh(x, D):
     if not D:
@@ -24,9 +37,9 @@ def tanh(x, D):
     else:
         return 1.0 - (np.tanh(x) ** 2)
 
-# Need 4 of each synapse, for the gates between the layers
-def gen_lstm_syn(X_DIM, Y_DIM, zeroed):
 
+# Initialises the LSTM weight matrices
+def init_lstm_weights(X_DIM, Y_DIM, zeroed):
     def layer():
         if zeroed:
             return np.zeros((X_DIM, Y_DIM))

@@ -30,10 +30,12 @@ Where `lr` is the learning rate; `in_dim` is the dimension of the input layer; `
 The training data should be encoded as integers, and given as two lists: a list of inputs and a corresponding one of targets. The RNN can then be trained by calling the function:
 
 ```python
-rnn.train(iterations, inputs, targets)
+rnn.train(iterations, inputs, targets, seq_len)
 ```
+
+Where `iterations` is the number of iterations to run, `inputs` and `targets` are the training data, and `seq_len` is the length of each batch of data.
 
 ## Planned Features and Improvements
 * A sampling method to view the output of the network as it is training, using a forward pass.
-* Refactor the code in modules which employ the standard forward-backward API.
+* Refactor the code to use a graph of computation model.
 * Use a linear sigmoid function to improve the speed.
