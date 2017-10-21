@@ -91,7 +91,7 @@ class LSTM_RNN:
             'in_h': init_dict_like(self.vars['in_h']),
             'h_h': init_dict_like(self.vars['h_h']),
             'h_out': np.zeros_like(self.vars['h_out']),
-            'bias': np.zeros(OUT_DIM)
+            'bias': np.zeros(self.out_dim)
         }
 
         # Initialising Adagrad memory variables
@@ -99,7 +99,7 @@ class LSTM_RNN:
             'in_h': init_dict_like(self.vars['in_h']),
             'h_h': init_dict_like(self.vars['h_h']),
             'h_out': np.zeros_like(self.vars['h_out']),
-            'bias': np.zeros(OUT_DIM)
+            'bias': np.zeros(self.out_dim)
         }
 
         # Backward propagation
